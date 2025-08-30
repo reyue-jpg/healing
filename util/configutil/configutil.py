@@ -13,11 +13,16 @@ class IniConfigError(Exception):
 class IniConfigHandler:
     """
     配置工具类，读取配置文件并完成配置初始化
-    :param file_path: 配置文件路径
-    :param logger 指定日志记录器，如不指定则生成一个自带的单例日志记录器
-    :param env_prefix 指定需要注入环境变量的前缀
-    :param env_sections 需要从配置文件中读取的配置节，默认初始化 driver
-    :param overwrite_env 是否覆盖环境变量，默认为覆盖
+
+    :param
+        file_path: 配置文件路径
+        logger 指定日志记录器，如不指定则生成一个自带的单例日志记录器
+        env_prefix 指定需要注入环境变量的前缀
+        env_sections 需要从配置文件中读取的配置节，默认初始化 driver
+        overwrite_env 是否覆盖环境变量，默认为覆盖
+
+    :return
+
     """
 
     def __init__(
@@ -55,6 +60,9 @@ class IniConfigHandler:
 
     def update_env(self) -> None:
         for section in self.env_sections:
+            # 如果不是 驱动 配置节则跳过
+            if section != 'driver':
+                continue
             if not self.parser.has_section(section):
                 self.logger.error(f"配置节不存在，跳过环境变量注入: [{section}]")
                 continue
@@ -88,6 +96,9 @@ class IniConfigHandler:
         self.injected_env_var.clear()
         self.original_env_var.clear()
         self.logger.info("所有注入的环境变量已清理...")
+
+    def _search_config_file(self):
+        pass
 
     def _cleanup_env_silent(self):
         """静默清理环境变量，不记录日志（用于 atexit 和 __del__）"""
@@ -124,3 +135,4 @@ class IniConfigHandler:
 
 if __name__ == '__main__':
     config = IniConfigHandler()
+    del config
