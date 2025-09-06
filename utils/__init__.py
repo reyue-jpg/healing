@@ -1,6 +1,10 @@
 from utils.configutil.configutil import IniConfigHandler
 from utils.logutil.logutil import BuildLogger
 
-configparser =
+__auth__ = 'FUHAO'
 
-__all__ = []
+configparser =IniConfigHandler()
+log_level = configparser.get_log_level()
+logger = BuildLogger(use_console=True, log_level=log_level)
+
+__all__ = ['IniConfigHandler', 'BuildLogger', 'configutil', 'logger']
