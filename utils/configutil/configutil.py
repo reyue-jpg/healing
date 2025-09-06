@@ -49,6 +49,7 @@ class IniConfigHandler:
         self.env_prefix = env_prefix
         self.env_sections = env_sections
         self.overwrite_env = overwrite_env
+        self.log_level = log_level
         self.original_env_var = {}
         self.injected_env_var = set()
         self.found_config_path:Optional[Path] = None
@@ -78,7 +79,7 @@ class IniConfigHandler:
             if section != 'driver':
                 continue
             if not self.parser.has_section(section):
-                self.logger.error(f"配置节不存在，跳过环境变量注入: [{section}]")
+                self.logger.warning(f"配置节不存在，跳过环境变量注入: [{section}]")
                 continue
 
             for key in self.parser.options(section):
@@ -165,9 +166,33 @@ class IniConfigHandler:
         """返回搜索返回的配置文件路径 (如果有)"""
         return self.found_config_path
 
-    def get_log_level(self) -> str:
+    def get_log_level(self) -> Optional[int]:
         """返回配置文件中的 log_level"""
-        
+        level_map = {
+            'CRITICAL': logging.CRITICAL,
+            'FATAL': logging.FATAL,
+            'ERROR': logging.ERROR,
+            'WARNING': logging.WARNING,
+            'WARN': logging.WARN,
+            'INFO': logging.INFO,
+            'DEBUG': logging.DEBUG,
+            'NOSET': logging.NOTSET
+        }
+
+        for section in self.env_sections:
+            # 如果不是 日志等级 配置节则跳过
+            if section != 'log':
+                continue
+            if not self.parser.has_section(section):
+                self.logger.warning(f"配置节不存在，获取日志等级失败: [{section}]")
+                continue
+            for level in self.parser.options(section):
+                if level in level_map:
+                    self.log_level = level_map.get(level)
+                    break
+
+        return self.log_level
+
 
     def __enter__(self):
         return self
