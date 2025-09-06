@@ -1,8 +1,8 @@
 import logging
 import os
 from typing import Optional
-from util.logutil import logutil
-from util.configutil import configutil
+from utils.logutil import logutil
+from utils.configutil import configutil
 from selenium import webdriver
 from selenium.webdriver.support.wait import WebDriverWait
 
