@@ -1,8 +1,9 @@
 import logging
 import os
+import utils
 from typing import Optional
-from utils.logutil import logutil
-from utils.configutil import configutil
+# from utils.logutil.logutil import BuildLogger
+# from utils.configutil.configutil import IniConfigHandler
 from selenium import webdriver
 from selenium.webdriver.support.wait import WebDriverWait
 
@@ -17,7 +18,8 @@ class SeleniumDriver:
     """
     def __init__(self, logger: Optional[logging.Logger]=None):
         self.driver = None
-        self.logger = logger or logutil.BuildLogger(use_console=True)
+        self.logger = logger
+
 
     def get_driver(self, driver_name: str, url: str):
         if driver_name == 'Chrome' or driver_name == 'chrome' or driver_name == 'C' or driver_name == 'c':
@@ -36,6 +38,5 @@ class SeleniumDriver:
         self.driver.get(url)
 
 if __name__ == '__main__':
-    config_parser = configutil.IniConfigHandler('./config.ini')
     driver = SeleniumDriver()
     driver.get_driver("c", "https://www.baidu.com")

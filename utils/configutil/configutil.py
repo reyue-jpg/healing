@@ -7,7 +7,7 @@ import selenium
 from selenium import webdriver
 import selenium.webdriver.chrome.options
 
-from utils.logutil.logutil import BuildLogger
+# 延迟导入以避免循环导入
 from pathlib import Path
 from typing import Dict, List, Optional, Union, Iterable, Iterator
 
@@ -45,7 +45,12 @@ class IniConfigHandler:
     ):
 
         self.file_path =  Path(file_path).resolve()
-        self.logger = logger or BuildLogger.get_default_logger(use_console=True)
+        if logger is None:
+            # 延迟导入以避免循环导入
+            from utils.logutil.logutil import BuildLogger
+            self.logger = BuildLogger.get_default_logger(use_console=True)
+        else:
+            self.logger = logger
         self.env_prefix = env_prefix
         self.env_sections = env_sections
         self.overwrite_env = overwrite_env
@@ -207,28 +212,3 @@ class IniConfigHandler:
             self.cleanup_env()
         except Exception as e:
             self.logger.error(e)
-
-class DriverManager:
-
-    def __init__(self, logger: Optional[logging.Logger]=None):
-        self.logger = logger or BuildLogger.get_default_logger(use_console=True)
-
-    def get_driver(self, driver_name: str, url: str) -> None:
-        if driver_name in ['Chrome', 'chrome', 'C', 'c']:
-            options = selenium.webdriver.chrome.options.Options()
-            options.add_argument("--start-maximized")
-            driver = webdriver.Chrome(options=options)
-        elif driver_name in ['Firefox', 'firefox', 'F', 'f']:
-            options = selenium.webdriver.firefox.options.Options()
-            options.add_argument("--start-maximized")
-            driver = webdriver.Firefox(options=options)
-        elif driver_name in ['Edge', 'edge', 'E', 'e']:
-            options = selenium.webdriver.edge.options.Options()
-            options.add_argument("--start-maximized")
-            driver = webdriver.Edge(options=options)
-        else:
-            self.logger.error(f"驱动加载异常{driver_name}")
-            sys.exit(1)
-        self.logger.info(f"驱动已获取")
-
-        driver.get(url)

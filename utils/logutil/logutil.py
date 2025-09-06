@@ -12,9 +12,13 @@ from selenium.webdriver.chrome import webdriver
 from selenium.webdriver.common.by import By
 
 from Property import WebElementData
-from utils.configutil.configutil import IniConfigHandler
 
-root = IniConfigHandler.find_root()
+# 延迟导入以避免循环导入
+def get_root():
+    from utils.configutil.configutil import IniConfigHandler
+    return IniConfigHandler.find_root()
+
+root = get_root()
 
 class BuildLogger:
     _instance = {}
