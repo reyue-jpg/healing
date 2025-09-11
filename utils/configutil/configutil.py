@@ -70,7 +70,7 @@ class IniConfigHandler:
         except configparser.Error as e:
             raise IniConfigError(f"解析配置文件失败 {e}")
 
-        # 读取日志等级并立即下发到 logger 与 handlers，避免后续 DEBUG 被输出
+        # 读取日志等级并立即下发到 logger 与 handlers，同步所有日志等级
         try:
             configured_level = self.get_log_level()
             if isinstance(configured_level, int):
