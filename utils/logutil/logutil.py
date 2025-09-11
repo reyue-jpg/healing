@@ -7,18 +7,8 @@ import time
 from datetime import datetime
 from logging.handlers import RotatingFileHandler, TimedRotatingFileHandler
 from typing import Optional
-
-from selenium.webdriver.chrome import webdriver
-from selenium.webdriver.common.by import By
-
 from Property import WebElementData
-
-# 延迟导入以避免循环导入
-def get_root():
-    from utils.configutil.configutil import IniConfigHandler
-    return IniConfigHandler.find_root()
-
-root = get_root()
+# from utils.configutil.configutil import IniConfigHandler
 
 class BuildLogger:
     _instance = {}
@@ -39,8 +29,14 @@ class BuildLogger:
     ):
 
         self.logdir = logdir or os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logs')
-        self.log_name = log_name or root / '.log'
-        self.log_level = log_level
+        self.log_name = log_name or datetime.today().strftime('%Y%m%d') + '.log'
+        # 允许传入字符串等级，做一次规范化
+        if isinstance(log_level, str):
+            normalized = log_level.strip().upper()
+            name_to_level = getattr(logging, normalized, None)
+            self.log_level = name_to_level if isinstance(name_to_level, int) else logging.DEBUG
+        else:
+            self.log_level = log_level
         self.max_bytes = max_bytes
         self.backup_count = backup_count
         self.logger = None
@@ -55,45 +51,52 @@ class BuildLogger:
         )
 
     def _init_logger(self, **kwargs):
-        formatter = logging.Formatter(
-            "%(asctime)s | %(name)s | %(levelname)s | %(message)s"
-        )
-
-        self.logger = logging.getLogger(self.log_name)
-        self.logger.setLevel(self.log_level)
-
-        if not self.logger.handlers:
-            rotating_handler = RotatingFileHandler(
-                filename=os.path.join(self.logdir, self.log_name),
-                maxBytes=self.max_bytes,
-                backupCount=self.backup_count
+        try:
+            formatter = logging.Formatter(
+                "%(asctime)s | %(name)s | %(levelname)s | %(message)s"
             )
-            rotating_handler.setFormatter(formatter)
-            rotating_handler.setLevel(self.log_level)
-            self.logger.addHandler(rotating_handler)
 
-            if kwargs.get('use_console'):
-                console_handler = logging.StreamHandler(sys.stdout)
-                console_handler.setFormatter(formatter)
-                console_handler.setLevel(self.log_level)
-                self.logger.addHandler(console_handler)
+            self.logger = logging.getLogger(self.log_name)
+            self.logger.setLevel(self.log_level)
 
-            if kwargs.get('use_timed_rotating'):
-                timed_handler = TimedRotatingFileHandler(
+            # 防止重复添加处理器
+            if not self.logger.handlers:
+                rotating_handler = RotatingFileHandler(
                     filename=os.path.join(self.logdir, self.log_name),
-                    when=kwargs['timed_when'],
-                    interval=kwargs['timed_interval'],
-                    backupCount=kwargs['timed_backup_count']
+                    maxBytes=self.max_bytes,
+                    backupCount=self.backup_count
                 )
-                timed_handler.setFormatter(formatter)
-                timed_handler.setLevel(self.log_level)
-                self.logger.addHandler(timed_handler)
+                rotating_handler.setFormatter(formatter)
+                rotating_handler.setLevel(self.log_level)
+                self.logger.addHandler(rotating_handler)
+
+                if kwargs.get('use_console'):
+                    console_handler = logging.StreamHandler(sys.stdout)
+                    console_handler.setFormatter(formatter)
+                    console_handler.setLevel(self.log_level)
+                    self.logger.addHandler(console_handler)
+
+                if kwargs.get('use_timed_rotating'):
+                    timed_handler = TimedRotatingFileHandler(
+                        filename=os.path.join(self.logdir, self.log_name),
+                        when=kwargs['timed_when'],
+                        interval=kwargs['timed_interval'],
+                        backupCount=kwargs['timed_backup_count']
+                    )
+                    timed_handler.setFormatter(formatter)
+                    timed_handler.setLevel(self.log_level)
+                    self.logger.addHandler(timed_handler)
+        except Exception as e:
+            # 如果日志初始化失败，使用基本日志配置
+            logging.basicConfig(level=self.log_level)
+            self.logger = logging.getLogger(__name__)
+            self.logger.error(f"日志初始化失败，使用基本配置: {e}")
 
     def _ensure_log_directory(self):
         os.makedirs(self.logdir, exist_ok=True)
 
     def add_custom_handler(self, handler):
-        if isinstance(handler, logging.Handler):
+        if not isinstance(handler, logging.Handler):
             raise TypeError("The handler must be a subclass of logging.Handler")
         self.logger.addHandler(handler)
 
@@ -109,12 +112,3 @@ class BuildLogger:
                 cls._instance[instance_key] = cls(**kwargs)
 
             return cls._instance[instance_key].logger
-
-class WebTest:
-    def web_test(self):
-        driver = webdriver.Edge()
-        driver.get("http://www.baidu.com")
-        time.sleep(5)
-        web_element = driver.find_element(By.XPATH, "//div[@class='san-card']")
-        link = WebElementData.from_selenium_element(web_element)
-        print(link)

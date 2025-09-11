@@ -6,8 +6,6 @@ import sys
 import selenium
 from selenium import webdriver
 import selenium.webdriver.chrome.options
-
-# 延迟导入以避免循环导入
 from pathlib import Path
 from typing import Dict, List, Optional, Union, Iterable, Iterator
 
@@ -39,18 +37,14 @@ class IniConfigHandler:
             file_path: Union[str, Path] = './config.ini',
             logger: Optional[logging.Logger] = None,
             env_prefix: Optional[str] = 'APP_',
-            env_sections: List[str]=['driver', 'log_level'],
+            env_sections: List[str]=['driver', 'log'],
             overwrite_env: bool = True,
-            log_level:Optional[str] = 'Debug'
+            log_level:Optional[int] = logging.DEBUG
     ):
 
+        from utils.logutil.logutil import BuildLogger
         self.file_path =  Path(file_path).resolve()
-        if logger is None:
-            # 延迟导入以避免循环导入
-            from utils.logutil.logutil import BuildLogger
-            self.logger = BuildLogger.get_default_logger(use_console=True)
-        else:
-            self.logger = logger
+        self.logger = logger or BuildLogger.get_default_logger(use_console=True)
         self.env_prefix = env_prefix
         self.env_sections = env_sections
         self.overwrite_env = overwrite_env
@@ -75,6 +69,18 @@ class IniConfigHandler:
             self.logger.info(f"读取配置 {self.file_path}")
         except configparser.Error as e:
             raise IniConfigError(f"解析配置文件失败 {e}")
+
+        # 读取日志等级并立即下发到 logger 与 handlers，避免后续 DEBUG 被输出
+        try:
+            configured_level = self.get_log_level()
+            if isinstance(configured_level, int):
+                self.log_level = configured_level
+                self.logger.setLevel(self.log_level)
+                for handler in list(self.logger.handlers):
+                    handler.setLevel(self.log_level)
+        except Exception:
+            # 若解析失败，保持临时 INFO 级别继续
+            pass
 
         self.update_env()
 
@@ -105,17 +111,29 @@ class IniConfigHandler:
         self._check_env(self.injected_env_var)
 
     def cleanup_env(self) -> None:
-        for env_name in self.injected_env_var:
-            if env_name in self.original_env_var:
-                os.environ[env_name] = self.original_env_var[env_name]
-                self.logger.info(f"恢复原始环境变量 {env_name}={self.original_env_var[env_name]}")
-            else:
-                del os.environ[env_name]
-                self.logger.warning(f"清理环境变量 {env_name}")
+        try:
+            for env_name in list(self.injected_env_var):  # 使用list创建副本，避免在迭代时修改集合
+                try:
+                    if env_name in self.original_env_var:
+                        os.environ[env_name] = self.original_env_var[env_name]
+                        self.logger.info(f"恢复原始环境变量 {env_name}={self.original_env_var[env_name]}")
+                    else:
+                        if env_name in os.environ:
+                            del os.environ[env_name]
+                        self.logger.warning(f"清理环境变量 {env_name}")
+                except Exception as e:
+                    self.logger.error(f"清理环境变量 {env_name} 时出错: {e}")
+                    # 继续清理其他变量
 
-        self.injected_env_var.clear()
-        self.original_env_var.clear()
-        self.logger.info("所有注入的环境变量已清理...")
+            self.injected_env_var.clear()
+            self.original_env_var.clear()
+            self.logger.info("所有注入的环境变量已清理...")
+        except Exception as e:
+            # 如果日志系统不可用，尝试简单打印
+            try:
+                print(f"清理环境变量过程中发生错误: {e}")
+            except:
+                pass
 
     def _check_env(self, var_set: set) -> None:
         for subset in var_set:
@@ -172,30 +190,43 @@ class IniConfigHandler:
         return self.found_config_path
 
     def get_log_level(self) -> Optional[int]:
-        """返回配置文件中的 log_level"""
+        """返回配置文件中的日志等级（整型），默认为 logging.DEBUG"""
         level_map = {
             'CRITICAL': logging.CRITICAL,
             'FATAL': logging.FATAL,
             'ERROR': logging.ERROR,
             'WARNING': logging.WARNING,
-            'WARN': logging.WARN,
+            'WARN': logging.WARNING,
             'INFO': logging.INFO,
             'DEBUG': logging.DEBUG,
-            'NOSET': logging.NOTSET
+            'NOTSET': logging.NOTSET
         }
 
-        for section in self.env_sections:
-            # 如果不是 日志等级 配置节则跳过
-            if section != 'log':
-                continue
-            if not self.parser.has_section(section):
-                self.logger.warning(f"配置节不存在，获取日志等级失败: [{section}]")
-                continue
-            for level in self.parser.options(section):
-                if level in level_map:
-                    self.log_level = level_map.get(level)
-                    break
+        section = 'log'
+        if not self.parser.has_section(section):
+            self.logger.warning(f"配置节不存在，获取日志等级失败: [{section}]，使用默认等级 DEBUG")
+            return self.log_level
 
+        # 兼容不同键名
+        candidate_keys = ['LEVEL', 'Level', 'level', 'LOG_LEVEL', 'log_level']
+        level_value: Optional[str] = None
+        for key in candidate_keys:
+            if self.parser.has_option(section, key):
+                level_value = self.parser.get(section, key)
+                break
+
+        # 若找不到已知键名，则尝试读取该节中的第一个键的值
+        if level_value is None:
+            options = self.parser.options(section)
+            if options:
+                level_value = self.parser.get(section, options[0])
+
+        if isinstance(level_value, str):
+            normalized = level_value.strip().upper()
+            if normalized in level_map:
+                self.log_level = level_map[normalized]
+            else:
+                self.logger.warning(f"未知日志等级值: {level_value}，使用默认等级 DEBUG")
         return self.log_level
 
 
@@ -207,8 +238,15 @@ class IniConfigHandler:
         # 返回False代表不处理异常，让异常继续传播
         return False
 
-    def __del__(self):
-        try:
-            self.cleanup_env()
-        except Exception as e:
-            self.logger.error(e)
+    # def __del__(self):
+    #     try:
+    #         # 检查日志记录器是否仍然可用
+    #         if hasattr(self, 'logger') and self.logger:
+    #             self.cleanup_env()
+    #     except Exception as e:
+    #         # 在程序退出时，日志系统可能已经不可用，所以忽略错误
+    #         try:
+    #             print(f"清理环境变量时发生错误（可忽略）: {e}")
+    #         except:
+    #             # 如果连打印都不可用，则完全忽略
+    #             pass
