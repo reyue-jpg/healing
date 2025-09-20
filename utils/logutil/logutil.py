@@ -55,7 +55,7 @@ class BuildLogger:
     def _init_logger(self, **kwargs):
         try:
             formatter = logging.Formatter(
-                "%(asctime)s | %(name)s | %(levelname)s | %(message)s"
+                '%(asctime)s | %(levelname)s | %(filename)s:%(lineno)d | %(message)s', '%Y-%m-%d  %H:%M:%S'
             )
 
             self.logger = logging.getLogger(self.log_name)
