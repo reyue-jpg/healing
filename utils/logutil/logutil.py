@@ -7,7 +7,7 @@ import time
 from datetime import datetime
 from logging.handlers import RotatingFileHandler, TimedRotatingFileHandler
 from typing import Optional
-from Property import WebElementData
+from pathlib import Path
 # from utils.configutil.configutil import IniConfigHandler
 
 class BuildLogger:
@@ -28,8 +28,10 @@ class BuildLogger:
             timed_backup_count: int = 7,
     ):
 
-        self.logdir = logdir or os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logs')
-        self.log_name = log_name or datetime.today().strftime('%Y%m%d') + '.log'
+        project_root = self.get_root_dir() / 'logs'
+
+        self.logdir = logdir or project_root
+        self.log_name = log_name or 'healing_' + datetime.today().strftime('%Y%m%d') + '.log'
         # 允许传入字符串等级，做一次规范化
         if isinstance(log_level, str):
             normalized = log_level.strip().upper()
@@ -39,7 +41,7 @@ class BuildLogger:
             self.log_level = log_level
         self.max_bytes = max_bytes
         self.backup_count = backup_count
-        self.logger = None
+        self.logger:Optional[logging.Logger] = None
 
         self._ensure_log_directory()
         self._init_logger(
@@ -91,6 +93,43 @@ class BuildLogger:
             logging.basicConfig(level=self.log_level)
             self.logger = logging.getLogger(__name__)
             self.logger.error(f"日志初始化失败，使用基本配置: {e}")
+
+    def get_root_dir(self) -> Path:
+        config_names = [
+            'config.ini',
+            'requirements.txt',
+            'settings.ini',
+            'application.yaml'
+        ]
+
+        configutil_dir = Path().cwd()
+
+        project_root = configutil_dir.parent
+        search_paths = [
+            project_root,
+            project_root.parent,
+            configutil_dir,
+        ]
+
+        unique_paths = []
+        seen = set()
+        for path in search_paths:
+            try:
+                resolved_path = path.resolve()
+                if resolved_path.exists() and resolved_path not in seen:
+                    seen.add(resolved_path)
+                    unique_paths.append(resolved_path)
+            except OSError as e:
+                self.logger.error(e)
+                continue
+
+        for search_path in unique_paths:
+            for file_name in config_names:
+                root_marks = search_path / file_name
+                if root_marks.exists():
+                    return root_marks.parent
+
+        return configutil_dir
 
     def _ensure_log_directory(self):
         os.makedirs(self.logdir, exist_ok=True)

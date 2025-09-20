@@ -16,7 +16,8 @@ def initialize():
 
     configparser = IniConfigHandler()
     log_level = configparser.get_log_level()
-    logger = BuildLogger(log_level=log_level, use_console=True)
+    log_file_path = configparser.found_config_path
+    logger = BuildLogger(logdir=log_file_path, log_level=log_level, use_console=True)
 
     return configparser, logger
 

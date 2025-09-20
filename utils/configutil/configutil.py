@@ -17,7 +17,7 @@ class IniConfigHandler:
     """
     配置工具类，读取配置文件并完成配置初始化
 
-    :argument
+    :param
         file_path: 配置文件路径
         logger 指定日志记录器，如不指定则生成一个自带的单例日志记录器
         env_prefix 指定需要注入环境变量的前缀
@@ -79,7 +79,7 @@ class IniConfigHandler:
                 for handler in list(self.logger.handlers):
                     handler.setLevel(self.log_level)
         except Exception:
-            # 若解析失败，保持临时 INFO 级别继续
+            # 若解析失败，保持默认级别继续
             pass
 
         self.update_env()

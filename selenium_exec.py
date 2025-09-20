@@ -115,6 +115,6 @@ if __name__ == '__main__':
     handler = IniConfigHandler()
     try:
         driver = SeleniumDriver()
-        driver.get_driver("e", "https://www.baidu.com")
+        driver.get_driver("c", "https://www.baidu.com")
     finally:
         handler.cleanup_env()
