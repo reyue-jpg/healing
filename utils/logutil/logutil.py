@@ -21,6 +21,7 @@ class BuildLogger:
             log_level: int = logging.DEBUG,
             max_bytes: int = 10 * 1024 * 1024,
             backup_count: int = 3,
+            encoding: str = "utf-8",
             use_console: bool = False,
             use_timed_rotating: bool = False,
             timed_when: str = "midnight",
@@ -41,6 +42,7 @@ class BuildLogger:
             self.log_level = log_level
         self.max_bytes = max_bytes
         self.backup_count = backup_count
+        self.encoding = encoding
         self.logger:Optional[logging.Logger] = None
 
         self._ensure_log_directory()
@@ -66,6 +68,7 @@ class BuildLogger:
                 rotating_handler = RotatingFileHandler(
                     filename=os.path.join(self.logdir, self.log_name),
                     maxBytes=self.max_bytes,
+                    encoding=self.encoding,
                     backupCount=self.backup_count
                 )
                 rotating_handler.setFormatter(formatter)
@@ -83,7 +86,8 @@ class BuildLogger:
                         filename=os.path.join(self.logdir, self.log_name),
                         when=kwargs['timed_when'],
                         interval=kwargs['timed_interval'],
-                        backupCount=kwargs['timed_backup_count']
+                        backupCount=kwargs['timed_backup_count'],
+                        encoding=self.encoding
                     )
                     timed_handler.setFormatter(formatter)
                     timed_handler.setLevel(self.log_level)
