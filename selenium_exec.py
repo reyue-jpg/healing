@@ -1,5 +1,6 @@
 import logging
 import os
+import shutil
 import winreg
 import subprocess
 import requests
@@ -317,6 +318,12 @@ class SeleniumDriver:
         try:
             if driver_name in ['chrome', 'c']:
                 driver_path = ChromeDriverManager().install()
+                if os.path.exists(driver_path):
+                    self.logger.info(f"ChromeDriver 下载成功: {driver_path}")
+                    chrome_env = os.environ["APP_CHROME"]
+                    target_path = os.path.join(chrome_env, os.path.basename(driver_path))
+                    # 移动文件
+                    shutil.move(driver_path, target_path)
                 service = ChromeService(executable_path=driver_path)
                 chrome_options = self._get_chrome_options()
                 self.driver = webdriver.Chrome(service=service, options=chrome_options)

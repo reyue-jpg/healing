@@ -116,7 +116,7 @@ class IniConfigHandler:
                 try:
                     if env_name in self.original_env_var:
                         os.environ[env_name] = self.original_env_var[env_name]
-                        self.logger.info(f"恢复原始环境变量 {env_name}={self.original_env_var[env_name]}")
+                        self.logger.info(f"程序退出, 恢复原始环境变量 {env_name}={self.original_env_var[env_name]}")
                     else:
                         if env_name in os.environ:
                             del os.environ[env_name]
