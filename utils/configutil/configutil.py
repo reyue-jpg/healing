@@ -225,6 +225,7 @@ class IniConfigHandler:
             normalized = level_value.strip().upper()
             if normalized in level_map:
                 self.log_level = level_map[normalized]
+                self.logger.info(f"日志等级已设置为 {normalized}")
             else:
                 self.logger.warning(f"未知日志等级值: {level_value}，使用默认等级 DEBUG")
         return self.log_level

@@ -15,12 +15,11 @@ def initialize():
     from utils.logutil.logutil import BuildLogger
 
     configparser = IniConfigHandler()
-    log_level = configparser.get_log_level()
+    # 避免出现重复调用问题
+    log_level = configparser.log_level
     log_file_path = configparser.found_config_path
     logger = BuildLogger(logdir=log_file_path, log_level=log_level, use_console=True)
 
     return configparser, logger
-
-initialize()
 
 __all__ = ['IniConfigHandler', 'BuildLogger', 'logger', 'configparser', 'initialize']

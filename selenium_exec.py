@@ -320,8 +320,9 @@ class SeleniumDriver:
                 driver_path = ChromeDriverManager().install()
                 if os.path.exists(driver_path):
                     self.logger.info(f"ChromeDriver 下载成功: {driver_path}")
-                    chrome_env = os.environ["APP_CHROME"]
+                    chrome_env = os.path.split(os.environ["APP_CHROME"])[0]
                     target_path = os.path.join(chrome_env, os.path.basename(driver_path))
+                    self.logger.info(f"准备移动文件 {target_path}")
                     # 移动文件
                     shutil.move(driver_path, target_path)
                 service = ChromeService(executable_path=driver_path)
