@@ -22,4 +22,6 @@ def initialize():
 
     return configparser, logger
 
+initialize()
+
 __all__ = ['IniConfigHandler', 'BuildLogger', 'logger', 'configparser', 'initialize']
