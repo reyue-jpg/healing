@@ -1,6 +1,7 @@
 import logging
 import os
 import shutil
+import time
 import winreg
 import subprocess
 import requests
@@ -379,6 +380,24 @@ class SeleniumDriver:
                 self.logger.error(
                     "Edge驱动下载地址: https://developer.microsoft.com/en-us/microsoft-edge/tools/webdriver/")
             raise
+
+    def _safe_move_driver(self, source_path, target_path, max_retries=3) -> None:
+        """安全的移动驱动文件"""
+        for attempt in range(max_retries):
+            try:
+                source_path = os.path.abspath(source_path)
+                if os.path.exists(source_path) and os.chmod(target_path, 0o755):
+                    time.sleep(1)
+                    shutil.move(source_path, target_path)
+                    return True
+            except Exception as e:
+                self.logger.warning(f"第 {attempt+1} 轮移动驱动文件失败")
+                if attempt < max_retries - 1:
+                    time.sleep(2)
+                else:
+                    raise e
+        return None
+
 
     def _setup_chrome_driver(self, url: str):
         """设置Chrome驱动"""
