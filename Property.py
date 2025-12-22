@@ -13,6 +13,7 @@ class WebElementData:
             src: str = "",
             name: str = "",
             value: str = "",
+            xpath: str = "",
             attributes: Dict[str, str] = None
     ):
         """
@@ -26,6 +27,7 @@ class WebElementData:
             src: 资源地址 (适用于<img>, <script>等标签)
             name: 元素的name属性
             value: 元素的value属性 (适用于input等表单元素)
+            xpath: 元素的绝对XPath路径
             attributes: 其他HTML属性的字典
         """
         self.tag = tag
@@ -36,6 +38,7 @@ class WebElementData:
         self.src = src
         self.name = name
         self.value = value
+        self.xpath = xpath
         self.attributes = attributes or {}
 
     def __str__(self) -> str:
@@ -48,6 +51,7 @@ class WebElementData:
             f"  Src: {self.src}" if self.src else None,
             f"  Name: {self.name}" if self.name else None,
             f"  Value: {self.value}" if self.value else None,
+            f"  XPath: {self.xpath}" if self.xpath else None,
             f"  Attributes: {self.attributes}" if self.attributes else None
         ]
         return '\n'.join(filter(None, info))
@@ -69,6 +73,7 @@ class WebElementData:
             'src': self.src,
             'name': self.name,
             'value': self.value,
+            'xpath': self.xpath,
             'attributes': self.attributes
         }
 
@@ -93,6 +98,9 @@ class WebElementData:
         # 获取基本属性
         classes = element.get_attribute('class')
 
+        # 获取绝对XPath路径
+        xpath = cls._get_absolute_xpath(element)
+
         # 创建实例
         instance = cls(
             tag=element.tag_name,
@@ -102,7 +110,8 @@ class WebElementData:
             href=element.get_attribute('href'),
             src=element.get_attribute('src'),
             name=element.get_attribute('name'),
-            value=element.get_attribute('value')
+            value=element.get_attribute('value'),
+            xpath=xpath
         )
 
         # 获取其他属性
@@ -126,6 +135,43 @@ class WebElementData:
                 instance.attributes = all_attrs
 
         return instance
+
+    @staticmethod
+    def _get_absolute_xpath(element: WebElement) -> str:
+        """
+        计算元素的绝对 XPath 路径
+
+        参数:
+            element: Selenium WebElement 对象
+
+        返回:
+            绝对 XPath 字符串
+        """
+        try:
+            xpath = element.parent.execute_script("""
+                function getXPath(element) {
+                    if (element.id !== '')
+                        return "//*[@id='" + element.id + "']";
+
+                    if (element === document.body)
+                        return "//" + element.tagName.toLowerCase();
+
+                    var ix = 0;
+                    var siblings = element.parentNode.childNodes;
+                    for (var i = 0; i < siblings.length; i++) {
+                        var sibling = siblings[i];
+                        if (sibling === element)
+                            return getXPath(element.parentNode) + '/' + element.tagName.toLowerCase() + '[' + (ix + 1) + ']';
+                        if (sibling.nodeType === 1 && sibling.tagName.toLowerCase() === element.tagName.toLowerCase())
+                            ix++;
+                    }
+                }
+                return getXPath(arguments[0]);
+            """, element)
+            return xpath if xpath else ""
+        except Exception:
+            # 如果 JavaScript 执行失败，返回空字符串
+            return ""
 
     def get_attribute(self, name: str, default: Optional[str] = None) -> Optional[str]:
         """

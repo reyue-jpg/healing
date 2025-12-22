@@ -6,7 +6,7 @@ import threading
 import time
 from datetime import datetime
 from logging.handlers import RotatingFileHandler, TimedRotatingFileHandler
-from typing import Optional
+from typing import Optional, Union
 from pathlib import Path
 # from utils.configutil.configutil import IniConfigHandler
 
@@ -16,7 +16,7 @@ class BuildLogger:
 
     def __init__(
             self,
-            logdir: Optional[str] = None,
+            logdir: Optional[Union[str, Path]] = None,
             log_name: Optional[str] = None,
             log_level: int = logging.DEBUG,
             max_bytes: int = 10 * 1024 * 1024,
@@ -98,21 +98,20 @@ class BuildLogger:
             self.logger = logging.getLogger(__name__)
             self.logger.error(f"日志初始化失败，使用基本配置: {e}")
 
-    def get_root_dir(self) -> Path:
-        config_names = [
-            'config.ini',
+    @staticmethod
+    def get_root_dir() -> Path:
+        target_names = [
+            'README.md',
             'requirements.txt',
-            'settings.ini',
-            'application.yaml'
         ]
 
-        configutil_dir = Path().cwd()
+        logutil_dir = Path().cwd()
 
-        project_root = configutil_dir.parent
+        project_root = logutil_dir.parent
         search_paths = [
             project_root,
             project_root.parent,
-            configutil_dir,
+            logutil_dir,
         ]
 
         unique_paths = []
@@ -128,12 +127,12 @@ class BuildLogger:
                 continue
 
         for search_path in unique_paths:
-            for file_name in config_names:
+            for file_name in target_names:
                 root_marks = search_path / file_name
                 if root_marks.exists():
                     return root_marks.parent
 
-        return configutil_dir
+        return logutil_dir
 
     def _ensure_log_directory(self):
         os.makedirs(self.logdir, exist_ok=True)
