@@ -6,6 +6,19 @@ __auth__ = 'FUHAO'
 logger = None
 configparser = None
 
+printLogo = """
+  _   _                  _   _                 
+ | | | |   ___    __ _  | | (_)  _ __     __ _ 
+ | |_| |  / _ \  / _` | | | | | | '_ \   / _` |
+ |  _  | |  __/ | (_| | | | | | | | | | | (_| |
+ |_| |_|  \___|  \__,_| |_| |_| |_| |_|  \__, |
+                                         |___/ 
+"""
+
+
+def print_ascii_logo() -> None:
+    """在程序启动时打印 ASCII 艺术字标志。"""
+    print(printLogo)
 
 def initialize():
     """延迟初始化函数，在需要时调用"""
@@ -28,4 +41,4 @@ def initialize():
 
 initialize()
 
-__all__ = ['BuildLogger', 'logger', 'configparser', 'initialize']
+__all__ = ['BuildLogger', 'logger', 'configparser', 'initialize', 'print_ascii_logo']
