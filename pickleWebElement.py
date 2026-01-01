@@ -4,9 +4,9 @@ import pickle
 import hashlib
 import json
 import os
+
 from utils.logutil import get_logger
 from utils.logutil.logutil import BuildLogger
-from pathlib import Path
 from typing import IO, Optional, Union, Any, Dict
 from base64 import b64decode, b64encode
 
@@ -25,6 +25,13 @@ class SecurePickle:
         :param secret_key 用于 HMAC 签名秘钥(字节串)，如果不指定将会随机生成
         """
         self.logger = get_logger()
+        # 判断文件需要生成的位置
+        if os.path.dirname(file_name):
+            self.file_name = file_name
+            self.logger.debug(f"已指定加密元素文件保存位置: {self.file_name}")
+        else:
+            self.file_name = os.path.join(BuildLogger.get_root_dir(), file_name)
+            self.logger.debug("加密元素文件生成在根目录")
 
         if algorithm == 'sha256':
             self.digestmod = hashlib.sha256
@@ -93,9 +100,13 @@ class SecurePickle:
             self.logger.error(f"反序列化时出现错误{e}")
             raise
 
-    def to_json_safe(self, obj: object) -> Path:
+    def to_json_safe(self, obj: object, json_file: Optional[str]=None) -> Dict[str, Any]:
         """
-        将安全格式转换为json格式
+         将对象转换为JSON安全格式并保存到文件
+
+        :param obj: 要序列化的对象
+        :param json_file: JSON文件路径，如果为None则使用self.file_name
+        :return: 转换后的字典
         """
         secure_data = self.dumps(obj)
         signature = secure_data[:self.signature_size]
@@ -106,24 +117,93 @@ class SecurePickle:
             'data': b64encode(data).decode('utf-8'),
             'algorithm': self.digestmod().name
         }
-
-        with open(self.file_name, 'w') as f:
+        file_path = json_file or self.file_name
+        with open(file_path, 'w', encoding='utf-8') as f:
             json.dump(result, f, ensure_ascii=False, indent=4)
 
-    def from_json_safe(self, json_data: Optional[Union[Dict[str, Any], str]]) -> Any:
-        """
-        从json文件加载
-        """
-        if os.path.exists(json_data):
-            if os.path.isfile(os.path.split(json_data)[1]):
-                data = json.loads(json_data)
-                print(data)
+        self.logger.info(f"已保存加密对象到: {result}")
+        return result
 
-    def export_key(self):
-        pass
+    def from_json_safe(self, json_data: Optional[Union[Dict[str, Any], str]]=None) -> Any:
+        """
+         从JSON文件或字典加载安全格式
+
+        :param json_data: JSON文件路径或已加载的字典，如果为None则使用self.file_name
+        :return: 反序列化的对象
+        """
+        loaded_data = None
+
+        if json_data is None:
+            # None则使用项目默认的json文件位置
+            json_file = self.file_name
+            if not os.path.exists(json_file):
+                raise ValueError(f"JSON文件不存在: {json_file}")
+            self.logger.info(f"加载元素文件: {json_file}")
+            with open(json_file, 'r', encoding='utf-8') as f:
+                try:
+                    loaded_data = json.load(f)
+                except json.JSONDecodeError:
+                    raise ValueError("无效的JSON数据")
+        elif isinstance(json_data, str):
+            # 如果是字符串判断是否为文件路径
+            if os.path.exists(json_data):
+                self.logger.info(f"加载元素文件: {json_data}")
+                with open(json_data, 'r', encoding='utf-8') as f:
+                    try:
+                        loaded_data = json.load(f)
+                    except json.JSONDecodeError:
+                        raise ValueError("无效的JSON数据")
+            else:
+                try:
+                    # 若json_data 字符串不是文件路径，则尝试直接解析
+                    loaded_data = json.loads(json_data)
+                except json.JSONDecodeError as e:
+                    raise ValueError("无效的JSON数据")
+        elif isinstance(json_data, dict):
+            loaded_data = json_data
+        else:
+            self.logger.error("json_data 必须是文件路径字符串、以序列化的json字符串对象或字典")
+
+        if 'signature' not in loaded_data or 'data' not in loaded_data:
+            raise ValueError("无效的JSON安全格式")
+
+        signature_b64 = loaded_data['signature']
+        data_b64 = loaded_data['data']
+
+        signature = b64decode(signature_b64)
+        data = b64decode(data_b64)
+
+        # 组合签名数据
+        secure_data = signature + data
+
+        return self.loads(secure_data)
+
+    def export_key(self) -> str:
+        """
+        导出Base64格式的密钥字符串
+
+        :return Base64编码的密钥字符串
+        """
+        return b64encode(self.secret_key).decode('utf-8')
+
+    @classmethod
+    def import_key(cls, base64_key: str, algorithm: str, **kwargs) -> "SecurePickle":
+        """
+        从Base64字符串导入密钥并创建新实例
+
+        :param base64_key: Base64格式的密钥字符串
+        :param algorithm: 哈希算法类型
+        :return SecurePickle实例
+        """
+        secret_key = b64decode(base64_key.encode('utf-8'))
+        print(secret_key)
+        return cls(secret_key, algorithm)
+
 
 if __name__ == '__main__':
     hmac_instance = SecurePickle()
     s = "hello"
-    h = hmac_instance.to_json_safe(s)
-    print(h)
+    hmac_instance.to_json_safe(s)
+    h = hmac_instance.from_json_safe()
+    key = hmac_instance.export_key()
+    print(key)
