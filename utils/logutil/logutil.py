@@ -18,7 +18,7 @@ class BuildLogger:
             self,
             logdir: Optional[Union[str, Path]] = None,
             log_name: Optional[str] = None,
-            log_level: int = logging.DEBUG,
+            log_level: Optional[Union[int, str]] = logging.DEBUG,
             max_bytes: int = 10 * 1024 * 1024,
             backup_count: int = 3,
             encoding: str = "utf-8",
@@ -123,7 +123,6 @@ class BuildLogger:
                     seen.add(resolved_path)
                     unique_paths.append(resolved_path)
             except OSError as e:
-                self.logger.error(e)
                 continue
 
         for search_path in unique_paths:

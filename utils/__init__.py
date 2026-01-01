@@ -19,7 +19,7 @@ def initialize():
     log_level = cli_params.log_level
     
     log_file_path = BuildLogger.get_root_dir()
-    logger = BuildLogger(logdir=log_file_path, log_level=log_level, use_console=True)
+    logger = BuildLogger(log_level=log_level, use_console=True)
     
     # configparser 设为 None，因为不再使用 IniConfigHandler
     configparser = None
