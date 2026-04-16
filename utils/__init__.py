@@ -32,7 +32,7 @@ def initialize():
     log_file_path = BuildLogger.get_root_dir()
     logger = BuildLogger(log_level=log_level, use_console=True)
     
-    # configparser 设为 None，因为不再使用 IniConfigHandler
+    # 配置解析对象设为空值，因为已不再依赖配置处理器
     configparser = None
 
     return configparser, logger

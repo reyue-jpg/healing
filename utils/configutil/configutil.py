@@ -37,7 +37,7 @@ class IniConfigHandler:
         self.original_env_var: Dict[str, str] = {}
         self.injected_env_var = set()
 
-        # 如果提供了 driver 设置，则注入环境变量
+        # 如果提供了驱动设置，则注入环境变量
         self.driver_settings = driver_settings
 
         # 立即应用日志等级
@@ -52,7 +52,7 @@ class IniConfigHandler:
         try:
             self.update_env(self.driver_settings)
         except Exception:
-            # 保持兼容：如果没有提供 driver 设置，跳过注入
+            # 保持兼容：如果没有提供驱动设置，则跳过注入
             pass
 
     def update_env(self, driver_settings: Optional[Dict[str, str]] = None) -> None:

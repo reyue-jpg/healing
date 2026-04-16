@@ -8,7 +8,7 @@ from datetime import datetime
 from logging.handlers import RotatingFileHandler, TimedRotatingFileHandler
 from typing import Optional, Union
 from pathlib import Path
-# from utils.configutil.configutil import IniConfigHandler
+# 预留：可在此处引入配置处理器
 
 class BuildLogger:
     _instance = {}

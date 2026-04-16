@@ -1,27 +1,27 @@
-from selenium.webdriver.common.by import By
-
-# 从utils包初始化
-from utils import print_ascii_logo
-from utils.logutil import get_logger
 from selenium.webdriver import Chrome
 from selenium.webdriver.chrome.service import Service
-from Property import WebElementData
-from experta import *
+from selenium.webdriver.common.by import By
+from selenium_interceptor import SeleniumInterceptor
 
-logger = get_logger()
-
-# 程序启动时打印 ASCII 艺术字
-print_ascii_logo()
-
+# 正常初始化 driver，这一步和之前完全一样
 service = Service(executable_path=r"./selenium_driver/chromedriver.exe")
 driver = Chrome(service=service)
 
-driver.get("https://www.baidu.com/")
-webelement = driver.find_element(By.ID, "kw")
-elementData = WebElementData.from_selenium_element(
-    webelement,
-    include_attributes=True,
-    custom_attributes=["data-custom"],
-)
-print(elementData)
-print(elementData.xpath)
+# 用 with 块激活拦截器，with 块内的所有操作都会被自动拦截
+with SeleniumInterceptor(driver) as d:
+    d.get("https://www.baidu.com/")
+
+    # find_element 和之前写法完全一致，无需任何改动
+    # 内部自动完成：创建 WebElementData 快照 → 写入全局注册表
+    search_box = d.find_element(By.ID, "kw")
+
+    # click、send_keys 等操作也和之前完全一致
+    # 内部自动完成：拦截操作 → 记录事件 → 异常时触发自愈
+    search_box.send_keys("hello")
+    search_box.clear()
+
+    btn = d.find_element(By.ID, "su")
+    btn.click()
+
+# with 块结束后，driver 自动还原为原始状态，可继续正常使用
+driver.quit()
