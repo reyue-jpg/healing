@@ -10,6 +10,9 @@ from headling.interceptor.element_wrapper import WrappedElement
 from headling.interceptor.selenium_interceptor import SeleniumInterceptor
 from headling.runtime.monitor import Monitor
 from headling.security.secure_pickle import SecurePickle, SecurityError
+from healing_engine import HealingEngine
+from facts import HealingResult, ElementFact, ContextFact
+
 
 __all__ = [
     "WebElementData",
@@ -20,4 +23,8 @@ __all__ = [
     "Monitor",
     "SecurePickle",
     "SecurityError",
+    "HealingEngine",
+    "HealingResult",
+    "ElementFact",
+    "ContextFact",
 ]
