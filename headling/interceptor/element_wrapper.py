@@ -42,9 +42,9 @@ class WrappedElement:
     """
     WebElement 的透明包装器。
 
-    - 携带原始定位器，用于 StaleElement 时的自愈回查
-    - 对指定操作方法做拦截（记录 + 异常捕获）
-    - 其他属性和方法通过 __getattr__ 无损透传
+    携带原始定位器，用于 StaleElement 时的自愈回查
+    对指定操作方法做拦截（记录 + 异常捕获）
+    其他属性和方法通过 __getattr__ 无损透传
     """
 
     def __init__(
@@ -169,3 +169,120 @@ class WrappedElement:
         locator = object.__getattribute__(self, "_locator")
         element = object.__getattribute__(self, "_element")
         return f"<WrappedElement locator={locator} element={element!r}>"
+
+
+if __name__ == "__main__":
+    """
+    本地调试：不启动真实浏览器，用假元素验证
+    透传、监控钩子、Stale + 自愈重试 三条路径。
+    """
+    import logging
+    from types import SimpleNamespace
+
+    from headling.models.web_element_data import WebElementData
+    from headling.registry.element_registry import ElementRegistry
+
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format="%(levelname)s %(name)s %(message)s",
+    )
+
+    class _PrintMonitor:
+        """最小监控桩，打印事件便于观察拦截流程。"""
+
+        def record_action_attempt(self, locator, method_name, args):
+            print(f"[monitor] attempt  locator={locator!r} method={method_name} args={args!r}")
+
+        def record_action_success(self, locator, method_name):
+            print(f"[monitor] success  locator={locator!r} method={method_name}")
+
+        def record_stale(self, locator, method_name, exc):
+            print(f"[monitor] stale    locator={locator!r} method={method_name} exc={exc!r}")
+
+        def record_healing_success(self, locator, new_xpath):
+            print(f"[monitor] heal_ok  locator={locator!r} new_xpath={new_xpath!r}")
+
+        def record_healing_failure(self, locator, error):
+            print(f"[monitor] heal_fail locator={locator!r} error={error!r}")
+
+    class _FakeDriver:
+        page_source = "<html><body><button id='b'>OK</button></body></html>"
+
+        def find_element(self, by, value):
+            return _FakeElementAfterHeal(self, healed=True)
+
+    class _FakeElementAfterHeal:
+        def __init__(self, parent, healed=False):
+            self.parent = parent
+            self._healed = healed
+
+        tag_name = "button"
+        text = "OK"
+        id = "b-new"
+
+        def click(self):
+            print(f"[fake element] click()  healed={self._healed}")
+
+    class _FakeElementStaleOnClick:
+        """第一次 click 抛 Stale；自愈后包装器会换成 _FakeElementAfterHeal 再点一次。"""
+
+        tag_name = "button"
+        text = "OK"
+        id = "b-old"
+
+        def __init__(self, driver):
+            self.parent = driver
+
+        def click(self):
+            raise StaleElementReferenceException()
+
+    class _FakeHealResult:
+        def __init__(self):
+            self.success = True
+            self.new_xpath = "//button[@id='b']"
+
+    class _FakeHealer:
+        def heal(self, snapshot, page_source):
+            print(f"[fake healer] heal() snapshot.tag={snapshot.tag!r} page_len={len(page_source)}")
+            return _FakeHealResult()
+
+    class _FakeElementHappy:
+        tag_name = "a"
+        text = "link"
+        id = "x1"
+
+        def click(self):
+            print("[fake element] happy click()")
+
+        def get_attribute(self, name):
+            return f"attr:{name}"
+
+    print("--- 1) 普通 click：无 Stale，仅走监控 ---")
+    reg = ElementRegistry.get_instance()
+    reg.clear()
+    loc = ("xpath", "//a[@id='x1']")
+    reg.register(loc, WebElementData(tag="a", xpath="//a[@id='x1']"))
+    mon = _PrintMonitor()
+    w1 = WrappedElement(_FakeElementHappy(), loc, reg, monitor=mon, healer=None)
+    print(repr(w1))
+    print("tag_name:", w1.tag_name, "get_attribute('href'):", w1.get_attribute("href"))
+    w1.click()
+
+    print("\n--- 2) Stale + 自愈：click 抛 Stale -> healer -> find_element -> 重试 click ---")
+    reg.clear()
+    loc2 = ("xpath", "//button[@id='b']")
+    reg.register(loc2, WebElementData(tag="button", xpath="//button[@id='b-old']"))
+    drv = _FakeDriver()
+    stale_el = _FakeElementStaleOnClick(drv)
+    w2 = WrappedElement(stale_el, loc2, reg, monitor=mon, healer=_FakeHealer())
+    w2.click()
+
+    print("\n--- 3) 无 healer：Stale 直接向上抛出 ---")
+    w3 = WrappedElement(_FakeElementStaleOnClick(drv), loc2, reg, monitor=mon, healer=None)
+    try:
+        w3.click()
+    except StaleElementReferenceException as e:
+        print("预期内捕获 StaleElementReferenceException:", e)
+
+    reg.clear()
+    print("\n调试结束。")

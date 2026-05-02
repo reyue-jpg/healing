@@ -27,11 +27,12 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.remote.webdriver import WebDriver
 from selenium.webdriver.remote.webelement import WebElement
 
+from utils.logutil import get_logger
 from headling.interceptor.element_wrapper import WrappedElement
 from headling.models.web_element_data import WebElementData
 from headling.registry.element_registry import ElementRegistry, LocatorKey
 
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 
 class SeleniumInterceptor:
