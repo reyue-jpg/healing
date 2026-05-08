@@ -17,8 +17,8 @@ import re
 from html.parser import HTMLParser
 from typing import Dict, List, Optional, Tuple
 
-from models.web_element_data import WebElementData
-from facts import ContextFact
+from headling.models.web_element_data import WebElementData
+from headling.facts import ContextFact
 
 
 # ─────────────────────────────────────────────────────────────────────────────
