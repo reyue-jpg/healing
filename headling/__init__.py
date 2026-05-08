@@ -13,15 +13,18 @@ from headling.security.secure_pickle import SecurePickle, SecurityError
 from headling.healing_engine import HealingEngine
 from headling.facts import ElementFact, ContextFact, HealingResult
 
+__auth__ = 'FUHAO'
 
-print("""
-  _                _ _             
- | |__   ___  __ _| (_)_ __   __ _ 
- | '_ \ / _ \/ _` | | | '_ \ / _` |
- | | | |  __/ (_| | | | | | | (_| |
- |_| |_|\___|\__,_|_|_|_| |_|\__, |
-                             |___/ 
-""")
+# 在程序启动时打印 ASCII 艺术字标志。
+printLogo = """
+      _   _                  _   _                 
+     | | | |   ___    __ _  | | (_)  _ __     __ _ 
+     | |_| |  / _ \  / _` | | | | | | '_ \   / _` |
+     |  _  | |  __/ | (_| | | | | | | | | | | (_| |
+     |_| |_|  \___|  \__,_| |_| |_| |_| |_|  \__, |
+                                             |___/ 
+"""
+print(printLogo)
 
 __all__ = [
     "WebElementData",

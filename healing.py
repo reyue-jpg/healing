@@ -1,22 +1,7 @@
-"""
-healing.py —— headling 框架演示与验证脚本。
-
-用法：
-    python healing.py
-
-本脚本演示：
-  1. 通过 SeleniumDriver 初始化 Chrome 浏览器
-  2. 用 SeleniumInterceptor 包装 driver，自动拦截所有 find_element / 操作
-  3. 绑定 Monitor（运行时监控）和 HealingEngine（自愈引擎）
-  4. 在 https://www.baidu.com 上执行一组真实操作
-  5. 退出时打印监控报告
-
-无需修改任何代码即可直接运行。
-"""
-
+from selenium.webdriver import Chrome
+from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 
-from selenium_exec import SeleniumDriver
 from headling.interceptor.selenium_interceptor import SeleniumInterceptor
 from headling.runtime.monitor import Monitor
 from headling.healing_engine import HealingEngine
@@ -29,8 +14,8 @@ def main():
     print("=" * 60)
     print("\n[1] 初始化浏览器 ...")
 
-    selenium_driver = SeleniumDriver()
-    driver = selenium_driver.get_driver("chrome", "https://www.baidu.com")
+    service = Service(executable_path=r"./selenium_driver/chromedriver.exe")
+    driver = Chrome(service=service)
 
     # ── 2. 初始化监控器 ────────────────────────────────────────────────────
     monitor = Monitor()
@@ -44,8 +29,11 @@ def main():
         monitor=monitor,
         healer=HealingEngine(),
         auto_heal=True,
+        persist_file="plk_element.json"
     ) as d:
 
+        d.get(f"https://www.baidu.com")
+        d.maximize_window()
         # ── 3a. 正常查找元素（自动注册快照）────────────────────────────────
         print("[3a] find_element: 百度搜索框（By.ID, 'chat-textarea'）")
         search_box = d.find_element(By.ID, "chat-textarea")
@@ -85,7 +73,7 @@ def main():
 
     # ── 5. 关闭浏览器 ──────────────────────────────────────────────────────
     print("\n[5] 关闭浏览器。")
-    selenium_driver.quit_driver()
+    d.quit()
     print("\n演示完成。headling 框架运行正常。\n")
 
 
