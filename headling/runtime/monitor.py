@@ -12,9 +12,10 @@ import time
 from dataclasses import dataclass
 from typing import Any, List, Optional
 
+from utils.logutil import get_logger
 from headling.registry.element_registry import LocatorKey
 
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 
 @dataclass

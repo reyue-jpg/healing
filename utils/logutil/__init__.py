@@ -9,7 +9,7 @@ __all__ = ['get_logger', 'BuildLogger']
 def get_logger(
     name: Optional[str] = None,
     level: Union[int, str] = logging.DEBUG,
-    use_console: bool = False,
+    use_console: bool = True,
     **kwargs
 ) -> logging.Logger:
     """获取日志记录器。

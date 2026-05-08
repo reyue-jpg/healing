@@ -24,12 +24,13 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.remote.webdriver import WebDriver
 from selenium.webdriver.remote.webelement import WebElement
 
+from utils.logutil import get_logger
 from headling.interceptor.element_wrapper import WrappedElement
 from headling.models.web_element_data import WebElementData
 from headling.registry.element_registry import ElementRegistry, LocatorKey
 from headling.security.secure_pickle import SecurePickle, SecurityError
 
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 
 class SeleniumInterceptor:
@@ -127,10 +128,10 @@ class SeleniumInterceptor:
                     self.registry.register(key, data)
                     loaded += 1
             logger.info("从磁盘恢复 %d 条元素快照", loaded)
-            print(f"  [Persist] 从磁盘加载了 {loaded} 条历史元素快照 ← {persist_file}")
+            logger.info(f"  [Persist] 从磁盘加载了 {loaded} 条历史元素快照 ← {persist_file}")
         except (SecurityError, Exception) as e:
             logger.warning("加载持久化文件失败（忽略）: %s", e)
-            print(f"  [Persist] 警告：加载失败（{e}），将从空注册表开始")
+            logger.warning(f"  [Persist] 警告：加载失败（{e}），将从空注册表开始")
 
     def _flush_registry(self, persist_file: str) -> None:
         """将注册表全量序列化落盘。"""
@@ -138,10 +139,10 @@ class SeleniumInterceptor:
             snapshots = self.registry.all_snapshots()
             self._pickle.to_json_safe(snapshots, persist_file)
             logger.info("已将 %d 条快照持久化到: %s", len(snapshots), persist_file)
-            print(f"  [Persist] 已将 {len(snapshots)} 条元素快照保存到 → {persist_file}")
+            logger.info(f"  [Persist] 已将 {len(snapshots)} 条元素快照保存到 → {persist_file}")
         except Exception as e:
             logger.error("持久化注册表失败: %s", e)
-            print(f"  [Persist] 警告：保存失败（{e}）")
+            logger.warning(f"  [Persist] 警告：保存失败（{e}）")
 
     # ── driver 方法替换 ───────────────────────────────────────────────────
 

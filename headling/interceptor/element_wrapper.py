@@ -14,13 +14,15 @@ import functools
 import logging
 from typing import TYPE_CHECKING, Any, Callable, Optional
 
+from utils.logutil import get_logger
 from selenium.common.exceptions import StaleElementReferenceException
 from selenium.webdriver.remote.webelement import WebElement
 
 if TYPE_CHECKING:
     from headling.registry.element_registry import ElementRegistry, LocatorKey
 
-logger = logging.getLogger(__name__)
+logger = get_logger()
+
 
 # 需要拦截的操作方法集合
 _INTERCEPTED_ACTIONS = frozenset(
