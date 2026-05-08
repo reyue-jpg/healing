@@ -5,11 +5,8 @@ test_healing_engine.py
 不需要真实浏览器，直接构造 WebElementData 快照 + mock page_source。
 """
 
-import sys, os
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
-from models.web_element_data import WebElementData
-from healing_engine import HealingEngine
+from headling.healing_engine import HealingEngine
+from headling.models.web_element_data import WebElementData
 
 
 def _heal(snapshot: WebElementData, page_source: str = "<html></html>"):

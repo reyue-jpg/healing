@@ -19,7 +19,7 @@ from typing import Dict, List, Optional, Tuple
 
 from experta import Fact, Field
 
-from models.web_element_data import WebElementData
+from headling.models.web_element_data import WebElementData
 
 
 # ─────────────────────────────────────────────────────────────────────────────

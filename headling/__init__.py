@@ -10,9 +10,18 @@ from headling.interceptor.element_wrapper import WrappedElement
 from headling.interceptor.selenium_interceptor import SeleniumInterceptor
 from headling.runtime.monitor import Monitor
 from headling.security.secure_pickle import SecurePickle, SecurityError
-from healing_engine import HealingEngine
-from facts import HealingResult, ElementFact, ContextFact
+from headling.healing_engine import HealingEngine
+from headling.facts import ElementFact, ContextFact, HealingResult
 
+
+print("""
+  _                _ _             
+ | |__   ___  __ _| (_)_ __   __ _ 
+ | '_ \ / _ \/ _` | | | '_ \ / _` |
+ | | | |  __/ (_| | | | | | | (_| |
+ |_| |_|\___|\__,_|_|_|_| |_|\__, |
+                             |___/ 
+""")
 
 __all__ = [
     "WebElementData",
