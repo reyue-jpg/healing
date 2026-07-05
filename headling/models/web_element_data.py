@@ -14,7 +14,8 @@ class WebElementData:
             name: str = "",
             value: str = "",
             xpath: str = "",
-            attributes: Dict[str, str] = None
+            attributes: Dict[str, str] = None,
+            url: str = "",
     ):
         """
         通用网页元素数据容器。
@@ -30,6 +31,7 @@ class WebElementData:
             value: 元素的 value 属性 (适用于 input 等表单元素)
             xpath: 元素的绝对 XPath 路径
             attributes: 其他 HTML 属性字典
+            url: 元素所属页面的 URL
         """
         self.tag = tag
         self.element_id = element_id
@@ -41,6 +43,7 @@ class WebElementData:
         self.value = value
         self.xpath = xpath
         self.attributes = attributes or {}
+        self.url = url
 
     def __str__(self) -> str:
         """可视化输出元素信息。"""
@@ -74,7 +77,8 @@ class WebElementData:
             "name": self.name,
             "value": self.value,
             "xpath": self.xpath,
-            "attributes": self.attributes
+            "attributes": self.attributes,
+            "url": self.url,
         }
 
     @classmethod
@@ -82,7 +86,8 @@ class WebElementData:
             cls,
             element: WebElement,
             include_attributes: bool = True,
-            custom_attributes: List[str] = None
+            custom_attributes: List[str] = None,
+            url: str = "",
     ) -> "WebElementData":
         """
         从 Selenium WebElement 创建实例。
@@ -91,6 +96,7 @@ class WebElementData:
             element: Selenium WebElement 对象
             include_attributes: 是否包含所有 HTML 属性
             custom_attributes: 要包含的特定属性列表
+            url: 元素所属页面的 URL
 
         返回:
             WebElementData 实例
@@ -107,7 +113,8 @@ class WebElementData:
             src=element.get_attribute("src"),
             name=element.get_attribute("name"),
             value=element.get_attribute("value"),
-            xpath=xpath
+            xpath=xpath,
+            url=url,
         )
 
         if include_attributes or custom_attributes:

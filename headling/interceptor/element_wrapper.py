@@ -11,7 +11,6 @@
 from __future__ import annotations
 
 import functools
-import logging
 from typing import TYPE_CHECKING, Any, Callable, Optional
 
 from utils.logutil import get_logger
@@ -20,6 +19,10 @@ from selenium.webdriver.remote.webelement import WebElement
 
 if TYPE_CHECKING:
     from headling.registry.element_registry import ElementRegistry, LocatorKey
+else:
+    # runtime 时避免循环导入，只作类型提示占位
+    ElementRegistry = None
+    LocatorKey = None
 
 logger = get_logger()
 
@@ -40,24 +43,28 @@ _INTERCEPTED_ACTIONS = frozenset(
 )
 
 
+
 class WrappedElement:
     """
     WebElement 的透明包装器。
 
-    携带原始定位器，用于 StaleElement 时的自愈回查
-    对指定操作方法做拦截（记录 + 异常捕获）
-    其他属性和方法通过 __getattr__ 无损透传
+    携带 url + 原始定位器，用于 StaleElement 时的自愈回查。
+    url 参数确保快照按页面隔离，同一定位器值在不同页面下不会相互混淆。
+    对指定操作方法做拦截（记录 + 异常捕获）。
+    其他属性和方法通过 __getattr__ 无损透传。
     """
 
     def __init__(
         self,
         element: WebElement,
+        url: str,
         locator: "LocatorKey",
         registry: "ElementRegistry",
         monitor: Optional[Any] = None,
         healer: Optional[Any] = None,
     ) -> None:
         object.__setattr__(self, "_element", element)
+        object.__setattr__(self, "_url", url)
         object.__setattr__(self, "_locator", locator)
         object.__setattr__(self, "_registry", registry)
         object.__setattr__(self, "_monitor", monitor)
@@ -92,32 +99,31 @@ class WrappedElement:
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
             monitor = object.__getattribute__(self, "_monitor")
+            url = object.__getattribute__(self, "_url")
             locator = object.__getattribute__(self, "_locator")
             registry = object.__getattribute__(self, "_registry")
             healer = object.__getattribute__(self, "_healer")
 
             if monitor:
-                monitor.record_action_attempt(locator, method_name, args)
+                monitor.record_action_attempt(url, locator, method_name, args)
 
             try:
                 result = func(*args, **kwargs)
                 if monitor:
-                    monitor.record_action_success(locator, method_name)
+                    monitor.record_action_success(url, locator, method_name)
                 return result
 
             except StaleElementReferenceException as exc:
                 logger.warning(
-                    "元素发生 Stale 异常，方法=%s 定位器=%s 错误=%s",
-                    method_name,
-                    locator,
-                    exc,
+                    "元素发生 Stale 异常，url=%s 方法=%s 定位器=%s 错误=%s",
+                    url, method_name, locator, exc,
                 )
                 if monitor:
-                    monitor.record_stale(locator, method_name, exc)
+                    monitor.record_stale(url, locator, method_name, exc)
 
-                recovered = self._attempt_recovery(locator, registry, healer, monitor)
+                recovered = self._attempt_recovery(url, locator, registry, healer, monitor)
                 if recovered is not None:
-                    logger.info("Stale 元素恢复成功，准备重试方法=%s", method_name)
+                    logger.info("Stale 元素恢复成功，url=%s 准备重试方法=%s", url, method_name)
                     object.__setattr__(self, "_element", recovered)
                     return getattr(recovered, method_name)(*args, **kwargs)
 
@@ -127,13 +133,14 @@ class WrappedElement:
 
     def _attempt_recovery(
         self,
+        url: str,
         locator: "LocatorKey",
         registry: "ElementRegistry",
         healer: Optional[Any],
         monitor: Optional[Any],
     ) -> Optional[WebElement]:
         """
-        从注册表查历史快照，调用 healer 获得新 XPath，
+        从注册表按 url 查历史快照，调用 healer 获得新 XPath，
         再通过 driver.find_element 重新定位元素。
 
         :return: 新的原生 WebElement，或 None（恢复失败）
@@ -141,9 +148,9 @@ class WrappedElement:
         if healer is None:
             return None
 
-        snapshot = registry.get(locator)
+        snapshot = registry.get(url, locator)
         if snapshot is None:
-            logger.debug("注册表中无快照，无法恢复元素: locator=%s", locator)
+            logger.debug("注册表中无快照，无法恢复元素: url=%s locator=%s", url, locator)
             return None
 
         try:
@@ -154,12 +161,12 @@ class WrappedElement:
 
                 new_element = driver.find_element(By.XPATH, result.new_xpath)
                 if monitor:
-                    monitor.record_healing_success(locator, result.new_xpath)
+                    monitor.record_healing_success(url, locator, result.new_xpath)
                 return new_element
         except Exception as exc:
-            logger.error("自愈恢复失败: %s", exc)
+            logger.error("自愈恢复失败: url=%s locator=%s error=%s", url, locator, exc)
             if monitor:
-                monitor.record_healing_failure(locator, str(exc))
+                monitor.record_healing_failure(url, locator, str(exc))
 
         return None
 
@@ -168,9 +175,10 @@ class WrappedElement:
         return cls
 
     def __repr__(self) -> str:
+        url = object.__getattribute__(self, "_url")
         locator = object.__getattribute__(self, "_locator")
         element = object.__getattribute__(self, "_element")
-        return f"<WrappedElement locator={locator} element={element!r}>"
+        return f"<WrappedElement url={url!r} locator={locator} element={element!r}>"
 
 
 if __name__ == "__main__":
@@ -179,9 +187,7 @@ if __name__ == "__main__":
     透传、监控钩子、Stale + 自愈重试 三条路径。
     """
     import logging
-    from types import SimpleNamespace
 
-    from headling.models.web_element_data import WebElementData
     from headling.registry.element_registry import ElementRegistry
 
     logging.basicConfig(
@@ -192,20 +198,20 @@ if __name__ == "__main__":
     class _PrintMonitor:
         """最小监控桩，打印事件便于观察拦截流程。"""
 
-        def record_action_attempt(self, locator, method_name, args):
-            print(f"[monitor] attempt  locator={locator!r} method={method_name} args={args!r}")
+        def record_action_attempt(self, url, locator, method_name, args):
+            print(f"[monitor] attempt  url={url!r} locator={locator!r} method={method_name} args={args!r}")
 
-        def record_action_success(self, locator, method_name):
-            print(f"[monitor] success  locator={locator!r} method={method_name}")
+        def record_action_success(self, url, locator, method_name):
+            print(f"[monitor] success  url={url!r} locator={locator!r} method={method_name}")
 
-        def record_stale(self, locator, method_name, exc):
-            print(f"[monitor] stale    locator={locator!r} method={method_name} exc={exc!r}")
+        def record_stale(self, url, locator, method_name, exc):
+            print(f"[monitor] stale    url={url!r} locator={locator!r} method={method_name} exc={exc!r}")
 
-        def record_healing_success(self, locator, new_xpath):
-            print(f"[monitor] heal_ok  locator={locator!r} new_xpath={new_xpath!r}")
+        def record_healing_success(self, url, locator, new_xpath):
+            print(f"[monitor] heal_ok  url={url!r} locator={locator!r} new_xpath={new_xpath!r}")
 
-        def record_healing_failure(self, locator, error):
-            print(f"[monitor] heal_fail locator={locator!r} error={error!r}")
+        def record_healing_failure(self, url, locator, error):
+            print(f"[monitor] heal_fail url={url!r} locator={locator!r} error={error!r}")
 
     class _FakeDriver:
         page_source = "<html><body><button id='b'>OK</button></body></html>"
@@ -258,33 +264,3 @@ if __name__ == "__main__":
 
         def get_attribute(self, name):
             return f"attr:{name}"
-
-    print("--- 1) 普通 click：无 Stale，仅走监控 ---")
-    reg = ElementRegistry.get_instance()
-    reg.clear()
-    loc = ("xpath", "//a[@id='x1']")
-    reg.register(loc, WebElementData(tag="a", xpath="//a[@id='x1']"))
-    mon = _PrintMonitor()
-    w1 = WrappedElement(_FakeElementHappy(), loc, reg, monitor=mon, healer=None)
-    print(repr(w1))
-    print("tag_name:", w1.tag_name, "get_attribute('href'):", w1.get_attribute("href"))
-    w1.click()
-
-    print("\n--- 2) Stale + 自愈：click 抛 Stale -> healer -> find_element -> 重试 click ---")
-    reg.clear()
-    loc2 = ("xpath", "//button[@id='b']")
-    reg.register(loc2, WebElementData(tag="button", xpath="//button[@id='b-old']"))
-    drv = _FakeDriver()
-    stale_el = _FakeElementStaleOnClick(drv)
-    w2 = WrappedElement(stale_el, loc2, reg, monitor=mon, healer=_FakeHealer())
-    w2.click()
-
-    print("\n--- 3) 无 healer：Stale 直接向上抛出 ---")
-    w3 = WrappedElement(_FakeElementStaleOnClick(drv), loc2, reg, monitor=mon, healer=None)
-    try:
-        w3.click()
-    except StaleElementReferenceException as e:
-        print("预期内捕获 StaleElementReferenceException:", e)
-
-    reg.clear()
-    print("\n调试结束。")

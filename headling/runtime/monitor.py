@@ -20,6 +20,7 @@ logger = get_logger()
 
 @dataclass
 class FindRecord:
+    url: str
     locator: LocatorKey
     timestamp: float
     success: bool
@@ -28,6 +29,7 @@ class FindRecord:
 
 @dataclass
 class ActionRecord:
+    url: str
     locator: LocatorKey
     method: str
     timestamp: float
@@ -37,6 +39,7 @@ class ActionRecord:
 
 @dataclass
 class HealingRecord:
+    url: str
     locator: LocatorKey
     timestamp: float
     success: bool
@@ -60,39 +63,41 @@ class Monitor:
         self._action_records: List[ActionRecord] = []
         self._healing_records: List[HealingRecord] = []
 
-    def record_find_attempt(self, locator: LocatorKey) -> None:
-        """记录查找尝试。"""
-        logger.debug("[Monitor] find_attempt: locator=%s", locator)
+    def record_find_attempt(self, url: str, locator: LocatorKey) -> None:
+        """记录查找尝试（仅 DEBUG 日志，不追加到列表，避免与 success/failure 重复）。"""
+        logger.debug("[Monitor] find_attempt: url=%s locator=%s", url, locator)
 
-    def record_find_success(self, locator: LocatorKey, result: Any) -> None:
+    def record_find_success(self, url: str, locator: LocatorKey, result: Any) -> None:
         """记录查找成功。"""
         self._find_records.append(
-            FindRecord(locator=locator, timestamp=time.time(), success=True)
+            FindRecord(url=url, locator=locator, timestamp=time.time(), success=True)
         )
-        logger.debug("[Monitor] find_success: locator=%s", locator)
+        logger.debug("[Monitor] find_success: url=%s locator=%s", url, locator)
 
-    def record_find_failure(self, locator: LocatorKey, exc: Exception) -> None:
+    def record_find_failure(self, url: str, locator: LocatorKey, exc: Exception) -> None:
         """记录查找失败。"""
         self._find_records.append(
             FindRecord(
+                url=url,
                 locator=locator,
                 timestamp=time.time(),
                 success=False,
                 error=str(exc),
             )
         )
-        logger.warning("[Monitor] find_failure: locator=%s, error=%s", locator, exc)
+        logger.warning("[Monitor] find_failure: url=%s locator=%s, error=%s", url, locator, exc)
 
     def record_action_attempt(
-        self, locator: LocatorKey, method: str, args: Any
+        self, url: str, locator: LocatorKey, method: str, args: Any
     ) -> None:
         """记录操作尝试。"""
-        logger.debug("[Monitor] action_attempt: %s on locator=%s", method, locator)
+        logger.debug("[Monitor] action_attempt: %s on url=%s locator=%s", method, url, locator)
 
-    def record_action_success(self, locator: LocatorKey, method: str) -> None:
+    def record_action_success(self, url: str, locator: LocatorKey, method: str) -> None:
         """记录操作成功。"""
         self._action_records.append(
             ActionRecord(
+                url=url,
                 locator=locator,
                 method=method,
                 timestamp=time.time(),
@@ -101,11 +106,12 @@ class Monitor:
         )
 
     def record_stale(
-        self, locator: LocatorKey, method: str, exc: Exception
+        self, url: str, locator: LocatorKey, method: str, exc: Exception
     ) -> None:
         """记录 stale 异常。"""
         self._action_records.append(
             ActionRecord(
+                url=url,
                 locator=locator,
                 method=method,
                 timestamp=time.time(),
@@ -114,32 +120,34 @@ class Monitor:
             )
         )
         logger.warning(
-            "[Monitor] stale_element: %s on locator=%s", method, locator
+            "[Monitor] stale_element: %s on url=%s locator=%s", method, url, locator
         )
 
-    def record_healing_success(self, locator: LocatorKey, new_xpath: str) -> None:
+    def record_healing_success(self, url: str, locator: LocatorKey, new_xpath: str) -> None:
         """记录自愈成功。"""
         self._healing_records.append(
             HealingRecord(
+                url=url,
                 locator=locator,
                 timestamp=time.time(),
                 success=True,
                 new_xpath=new_xpath,
             )
         )
-        logger.info("[Monitor] healing_success: locator=%s -> %s", locator, new_xpath)
+        logger.info("[Monitor] healing_success: url=%s locator=%s -> %s", url, locator, new_xpath)
 
-    def record_healing_failure(self, locator: LocatorKey, error: str) -> None:
+    def record_healing_failure(self, url: str, locator: LocatorKey, error: str) -> None:
         """记录自愈失败。"""
         self._healing_records.append(
             HealingRecord(
+                url=url,
                 locator=locator,
                 timestamp=time.time(),
                 success=False,
                 error=error,
             )
         )
-        logger.error("[Monitor] healing_failure: locator=%s, error=%s", locator, error)
+        logger.error("[Monitor] healing_failure: url=%s locator=%s, error=%s", url, locator, error)
 
     def report(self) -> str:
         """生成运行统计报告。"""
@@ -168,7 +176,7 @@ class Monitor:
             for record in self._healing_records:
                 status = "✓" if record.success else "✗"
                 lines.append(
-                    f"    [{status}] locator={record.locator} -> {record.new_xpath or record.error}"
+                    f"    [{status}] url={record.url} locator={record.locator} -> {record.new_xpath or record.error}"
                 )
 
         return "\n".join(lines)
