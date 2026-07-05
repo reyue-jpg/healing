@@ -51,14 +51,26 @@ _HIGH_WEIGHT_ATTRS = {"name", "id", "type", "data-testid", "data-id",
                       "data-cy", "data-qa", "aria-label", "placeholder",
                       "for", "href", "action"}
 
+# 不稳定属性：每次页面加载/刷新就会变化，不能作为重建定位的依赖
+# 即使它们出现在快照的 attributes 中，也必须被忽略
+_UNSTABLE_ATTRS = {"id", "class"}
+
 # 属性值最短前缀长度，用于 R007 模糊匹配
 _FUZZY_PREFIX_MIN_LEN = 4
 
 
 def _high_weight_attrs(attributes: dict) -> Dict[str, str]:
-    """从属性字典中筛选出高权重属性。"""
+    """从属性字典中筛选出高权重且稳定的属性。"""
     return {k: v for k, v in (attributes or {}).items()
-            if k in _HIGH_WEIGHT_ATTRS and v}
+            if k in _HIGH_WEIGHT_ATTRS
+            and k not in _UNSTABLE_ATTRS
+            and v}
+
+
+def _stable_attrs(attributes: dict) -> Dict[str, str]:
+    """从属性字典中筛选出所有稳定（非频繁变化）的属性。"""
+    return {k: v for k, v in (attributes or {}).items()
+            if k not in _UNSTABLE_ATTRS and v}
 
 
 def _build_attr_conditions(attrs: Dict[str, str]) -> str:
@@ -138,7 +150,7 @@ class _HealingKE(KnowledgeEngine):
         xpath = f"//{tag}{conditions}"
         self._add_candidate(xpath, "R001", 1)
 
-    # ── R002 单属性 + 文本匹配 ────────────────────────────────────────────
+    # ── R002 单稳定属性 + 文本匹配 ─────────────────────────────────────────
     @Rule(
         ElementFact(tag=MATCH.tag, text=MATCH.text, attributes=MATCH.attributes),
         TEST(lambda attributes: len(_high_weight_attrs(attributes)) == 1),
@@ -150,6 +162,43 @@ class _HealingKE(KnowledgeEngine):
         short_text = text.strip()[:40]
         xpath = f"//{tag}{conditions}[contains(text(),'{short_text}')]"
         self._add_candidate(xpath, "R002", 2)
+
+    # ── R002b 仅文本兜底 ─────────────────────────────────────────────────
+    # 触发条件：高权重稳定属性为 0（id 不再算高权重），
+    #           但有可用的稳定属性（如 data-anchor）可以用
+    #           且元素文本稳定 → 生成纯文本 XPath
+    @Rule(
+        ElementFact(tag=MATCH.tag, text=MATCH.text, attributes=MATCH.attributes),
+        TEST(lambda attributes: len(_high_weight_attrs(attributes)) == 0),
+        TEST(lambda attributes: len(_stable_attrs(attributes)) >= 1),
+        TEST(lambda text: bool(text and len(text.strip()) >= 4)),
+    )
+    def r002b_text_only(self, tag, text):
+        short_text = text.strip()[:40]
+        xpath = f"//{tag}[contains(text(),'{short_text}')]"
+        self._add_candidate(xpath, "R002b", 2)
+
+    # ── R013 稳定属性组合 + 文本（最高优先级）─────────────────────────────
+    # 专门处理：高权重稳定属性只有 id（不稳定），但有其他稳定属性 + 文本
+    # data-anchor 是典型场景：值稳定 + 权重低，需要与文本组合才能精确定位
+    @Rule(
+        ElementFact(tag=MATCH.tag, text=MATCH.text, attributes=MATCH.attributes),
+        TEST(lambda attributes: (
+            # id 在 attributes 中（不稳定，排除后 = 0），
+            # 且至少有一个其他稳定属性
+            "id" in (attributes or {}) and
+            len(_stable_attrs(attributes)) >= 1
+        )),
+        TEST(lambda text: bool(text and len(text.strip()) >= 2)),
+    )
+    def r013_stable_attr_plus_text(self, tag, text, attributes):
+        stable = _stable_attrs(attributes)
+        if not stable:
+            return
+        conditions = _build_attr_conditions(stable)
+        short_text = text.strip()[:40]
+        xpath = f"//{tag}{conditions}[contains(text(),'{short_text}')]"
+        self._add_candidate(xpath, "R013", 0)   # priority=0，最优先
 
     # ── R003 父级上下文 + 属性匹配 ────────────────────────────────────────
     @Rule(
@@ -213,7 +262,6 @@ class _HealingKE(KnowledgeEngine):
         self._add_candidate(xpath, "R006", 6)
 
     # ── R007 模糊属性部分匹配 ────────────────────────────────────────────
-    # 排除 class、role 等已由专用规则处理的属性
     _R007_EXCLUDE = {"class", "role", "aria-label", "placeholder"}
 
     @Rule(
@@ -221,13 +269,16 @@ class _HealingKE(KnowledgeEngine):
         TEST(lambda attributes: any(
             len(v) > 8
             for k, v in (attributes or {}).items()
-            if k not in _HealingKE._R007_EXCLUDE and k not in _HIGH_WEIGHT_ATTRS and v
+            if k not in _HealingKE._R007_EXCLUDE
+            and k not in _HIGH_WEIGHT_ATTRS
+            and k not in _UNSTABLE_ATTRS
+            and v
         )),
         TEST(lambda attributes: len(_high_weight_attrs(attributes)) == 0),
         TEST(lambda attributes: not (attributes or {}).get("role")),
     )
     def r007_fuzzy_attr(self, tag, attributes):
-        exclude = self._R007_EXCLUDE | _HIGH_WEIGHT_ATTRS
+        exclude = self._R007_EXCLUDE | _HIGH_WEIGHT_ATTRS | _UNSTABLE_ATTRS
         best_k, best_v = max(
             ((k, v) for k, v in (attributes or {}).items()
              if k not in exclude and v and len(v) > 8),

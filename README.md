@@ -2,8 +2,6 @@
 
 一个基于 **experta 专家系统**的 Selenium 自愈框架，能够在页面结构变化导致元素定位失败时，自动推理并验证新的 XPath，从而让自动化测试脚本具备自我修复能力。
 
----
-
 ## 特性
 
 - **自动快照注册** — `find_element` 成功后自动保存元素快照到注册表
@@ -12,8 +10,6 @@
 - **Selenium 透明拦截** — 通过上下文管理器包装 driver，代码无需修改
 - **持久化存储** — 快照自动保存为 HMAC 签名 JSON，重启后可恢复
 - **线程安全** — 注册表和日志均支持多线程并发
-
----
 
 ## 架构
 
@@ -62,8 +58,6 @@ SeleniumInterceptor          ← 拦截 find_element / find_elements
 | R011 | 类型分组匹配 | 11 |
 | R012 | 兜底策略 | 12 |
 
----
-
 ## 安装
 
 ```bash
@@ -75,8 +69,6 @@ pip install -r requirements.txt
 - `experta >= 1.9`
 
 > 需要预先准备好 ChromeDriver 并配置到 PATH 中，或在代码中指定 `Service(executable_path="...")`。
-
----
 
 ## 快速开始
 
@@ -113,8 +105,6 @@ with SeleniumInterceptor(
 print(d.monitor.report())
 ```
 
----
-
 ## 高级用法
 
 ### 直接使用注册表
@@ -150,8 +140,6 @@ from utils.logutil import get_logger
 logger = get_logger(name="myapp", level="INFO", use_console=True)
 ```
 
----
-
 ## 快照持久化
 
 `persist_file` 参数指定快照文件的保存路径：
@@ -160,8 +148,6 @@ logger = get_logger(name="myapp", level="INFO", use_console=True)
 - **退出时** — 将注册表全量保存为 HMAC 签名 JSON
 
 密钥文件自动管理（`persist_file.key`），无需手动指定。
-
----
 
 ## 运行演示
 
@@ -176,8 +162,6 @@ python healing.py
 4. 演示元素操作拦截
 5. 打印监控报告
 6. 关闭浏览器
-
----
 
 ## 项目结构
 
@@ -201,8 +185,6 @@ utils/
 
 healing.py                   ← 演示脚本
 ```
-
----
 
 ## License
 

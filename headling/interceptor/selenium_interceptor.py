@@ -4,9 +4,18 @@ headling/interceptor/selenium_interceptor.py
 SeleniumInterceptor —— 全局 Selenium 拦截器（上下文管理器）。
 
 新增持久化支持：
-  - __enter__ 时从 persist_file 加载历史快照，恢复注册表
+  - __enter__ 时从 persist_file 加载历史快照，恢复注册表（按 URL 隔离）
   - __exit__  时将注册表全量保存到 persist_file（HMAC 签名 JSON）
   - persist_file=None 时不做任何持久化（与旧行为完全兼容）
+
+快照结构（按 URL 隔离）：
+  {
+    "http://example.com/page1": {
+      "id::dynamicTarget": WebElementData(...),
+      ...
+    },
+    ...
+  }
 
 密钥管理：
   - 首次运行自动生成随机密钥，保存到 <persist_file>.key（Base64）
@@ -15,7 +24,6 @@ SeleniumInterceptor —— 全局 Selenium 拦截器（上下文管理器）。
 from __future__ import annotations
 
 import functools
-import logging
 import os
 from typing import Any, Callable, Optional
 
@@ -45,8 +53,6 @@ class SeleniumInterceptor:
         persist_file: 元素快照持久化 JSON 路径；None 表示不持久化
     """
 
-    registry: ElementRegistry = ElementRegistry.get_instance()
-
     def __init__(
         self,
         driver: WebDriver,
@@ -63,6 +69,9 @@ class SeleniumInterceptor:
 
         self._original_find_element  = driver.find_element
         self._original_find_elements = driver.find_elements
+
+        # 实例属性而非类属性：方法内部通过 self.registry 访问，便于测试隔离
+        self.registry = ElementRegistry.get_instance()
 
         # 持久化器（仅在指定了 persist_file 时创建）
         self._pickle: Optional[SecurePickle] = None
@@ -116,22 +125,59 @@ class SeleniumInterceptor:
         return sp
 
     def _restore_registry(self, persist_file: str) -> None:
-        """从 JSON 文件加载快照，合并进注册表（不覆盖内存中已有条目）。"""
+        """
+        从 JSON 文件加载快照，合并进注册表（不覆盖内存中已有条目）。
+
+        兼容两种持久化格式：
+        - 新格式（URL 分层）：{ "http://...": { "id::x": WebElementData } }
+        - 旧格式（扁平）：   { "id::x": WebElementData }   （用于迁移）
+          旧格式数据全部归属 driver.current_url
+        """
         if not os.path.exists(persist_file):
             logger.debug("持久化文件不存在，跳过加载: %s", persist_file)
             return
         try:
-            snapshots: dict = self._pickle.from_json_safe(persist_file)
+            raw: dict = self._pickle.from_json_safe(persist_file)
             loaded = 0
-            for key, data in snapshots.items():
-                if self.registry.get(key) is None:   # 不覆盖内存中已有的
-                    self.registry.register(key, data)
-                    loaded += 1
+
+            if not raw:
+                return
+
+            # 检测是否为新格式（第一层键包含 "://" 则是 URL）
+            first_key = next(iter(raw.keys()), "")
+            if "://" in str(first_key):
+                # 新格式：url -> { locator_key -> WebElementData }
+                for url, locators in raw.items():
+                    for key, data in locators.items():
+                        locator = self._parse_locator_key(key)
+                        if self.registry.get(url, locator) is None:
+                            self.registry.register(url, locator, data)
+                            loaded += 1
+            else:
+                # 旧格式扁平结构：全部归属为当前 URL
+                current_url = self._driver.current_url
+                for key, data in raw.items():
+                    locator = self._parse_locator_key(key)
+                    if self.registry.get(current_url, locator) is None:
+                        self.registry.register(current_url, locator, data)
+                        loaded += 1
+
             logger.info("从磁盘恢复 %d 条元素快照", loaded)
             logger.info(f"  [Persist] 从磁盘加载了 {loaded} 条历史元素快照 ← {persist_file}")
         except (SecurityError, Exception) as e:
             logger.warning("加载持久化文件失败（忽略）: %s", e)
             logger.warning(f"  [Persist] 警告：加载失败（{e}），将从空注册表开始")
+
+    @staticmethod
+    def _parse_locator_key(key: str) -> LocatorKey:
+        """
+        将序列化后的 key 反解析为 LocatorKey 元组。
+        格式为 "by::value"，其中 by 为 "id"、"xpath" 等字符串。
+        """
+        if "::" in key:
+            parts = key.split("::", 1)
+            return (parts[0], parts[1])
+        return key
 
     def _flush_registry(self, persist_file: str) -> None:
         """将注册表全量序列化落盘。"""
@@ -160,63 +206,66 @@ class SeleniumInterceptor:
         @functools.wraps(original)
         def wrapper(by: str, value: str):
             locator: LocatorKey = (by, value)
+            current_url = interceptor._driver.current_url
             if interceptor._monitor:
-                interceptor._monitor.record_find_attempt(locator)
+                interceptor._monitor.record_find_attempt(current_url, locator)
             try:
                 raw = original(by, value)
             except (NoSuchElementException, StaleElementReferenceException) as exc:
-                logger.warning("查找元素失败: locator=%s", locator)
+                logger.warning("查找元素失败: url=%s locator=%s", current_url, locator)
                 if interceptor._monitor:
-                    interceptor._monitor.record_find_failure(locator, exc)
+                    interceptor._monitor.record_find_failure(current_url, locator, exc)
                 if interceptor._auto_heal and interceptor._healer:
-                    healed = interceptor._attempt_heal(locator)
+                    healed = interceptor._attempt_heal(current_url, locator)
                     if healed is not None:
                         return healed
                 raise
 
             if single:
-                wrapped = interceptor._wrap_and_register(raw, locator)
+                wrapped = interceptor._wrap_and_register(raw, current_url, locator)
                 if interceptor._monitor:
-                    interceptor._monitor.record_find_success(locator, wrapped)
+                    interceptor._monitor.record_find_success(current_url, locator, wrapped)
                 return wrapped
 
-            result = [interceptor._wrap_and_register(el, locator) for el in raw]
+            result = [interceptor._wrap_and_register(el, current_url, locator) for el in raw]
             if interceptor._monitor:
-                interceptor._monitor.record_find_success(locator, result)
+                interceptor._monitor.record_find_success(current_url, locator, result)
             return result
 
         return wrapper
 
-    def _wrap_and_register(self, element: WebElement, locator: LocatorKey) -> WrappedElement:
+    def _wrap_and_register(self, element: WebElement, url: str, locator: LocatorKey) -> WrappedElement:
         try:
-            snapshot = WebElementData.from_selenium_element(element, include_attributes=True)
-            self.registry.register(locator, snapshot)
-            logger.debug("已注册快照: locator=%s tag=<%s>", locator, snapshot.tag)
+            snapshot = WebElementData.from_selenium_element(
+                element, include_attributes=True, url=url
+            )
+            self.registry.register(url, locator, snapshot)
+            logger.debug("已注册快照: url=%s locator=%s tag=<%s>", url, locator, snapshot.tag)
         except Exception as exc:
             logger.warning("快照失败（忽略）: %s", exc)
         return WrappedElement(
-            element=element, locator=locator, registry=self.registry,
+            element=element, url=url, locator=locator, registry=self.registry,
             monitor=self._monitor, healer=self._healer,
         )
 
-    def _attempt_heal(self, locator: LocatorKey) -> Optional[WrappedElement]:
-        snapshot = self.registry.get(locator)
+    def _attempt_heal(self, url: str, locator: LocatorKey) -> Optional[WrappedElement]:
+        snapshot = self.registry.get(url, locator)
         if snapshot is None:
-            logger.debug("注册表无历史快照，跳过自愈: locator=%s", locator)
+            logger.debug("注册表无历史快照，跳过自愈: url=%s locator=%s", url, locator)
             return None
         try:
             page_source = self._driver.page_source
             result = self._healer.heal(snapshot, page_source, self._driver)
             if result and result.success:
-                logger.info("自愈成功: %s", result.new_xpath)
+                logger.info("自愈成功: url=%s locator=%s xpath=%s", url, locator, result.new_xpath)
                 new_el = self._original_find_element(By.XPATH, result.new_xpath)
                 if self._monitor:
-                    self._monitor.record_healing_success(locator, result.new_xpath)
-                return self._wrap_and_register(new_el, locator)
+                    self._monitor.record_healing_success(url, locator, result.new_xpath)
+                return self._wrap_and_register(new_el, url, locator)
         except Exception as exc:
             logger.error("自愈过程异常: %s", exc)
             if self._monitor:
-                self._monitor.record_healing_failure(locator, str(exc))
+                self._monitor.record_healing_failure(url, locator, str(exc))
         return None
 
     @property
